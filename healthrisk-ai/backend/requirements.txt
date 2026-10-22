@@ -19,3 +19,8 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 httpx==0.28.1
 python-multipart==0.0.32
+streamlit
+pandas
+numpy
+scikit-learn
+joblib
