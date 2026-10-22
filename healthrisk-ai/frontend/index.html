@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HealthRisk AI — Educational Health Risk Screening & Diary</title>
+  <meta name="description" content="Educational screening demo estimating diabetes and heart disease risk from basic health measurements with SHAP explainability and private Health Diary tracking." />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    /* Toast styles */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-lg);
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-weight: 600;
+      z-index: 2000;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: all 0.25s ease;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .toast.success { border-left: 4px solid var(--risk-low); }
+    .toast.error { border-left: 4px solid var(--risk-high); }
+    .toast.info { border-left: 4px solid var(--primary); }
+  </style>
+</head>
+<body>
+
+  <!-- Sticky Top Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="#risk-checker" class="nav-brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <span>HealthRisk <span style="color: var(--primary);">AI</span></span>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#risk-checker" class="nav-link active">Risk Checker</a></li>
+          <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
+          <li><a href="#model-performance" class="nav-link">Model Performance</a></li>
+          <li><a href="#about-data" class="nav-link">About the Data</a></li>
+          <li><a href="#diary" class="nav-link">Health Diary</a></li>
+          <li><a href="#trends" class="nav-link">Trends</a></li>
+          <li><a href="#goals" class="nav-link">Goals</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle Dark / Light Theme" title="Toggle theme">
+          <span id="themeIcon"></span>
+        </button>
+
+        <a href="#auth" id="authNavBtn" class="btn btn-primary btn-sm">Sign In</a>
+
+        <!-- User Dropdown (Shown when signed in) -->
+        <div id="userNavDropdown" style="display: none; align-items: center; gap: 10px;">
+          <a href="#diary" class="btn btn-secondary btn-sm" style="font-weight: 700;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span id="userNavName">Account</span>
+          </a>
+          <button id="signOutBtn" class="btn btn-secondary btn-sm" title="Sign Out">Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWS CONTAINER -->
+  <main class="container">
+
+    <!-- ==================== VIEW 1: PUBLIC LANDING & RISK CHECKER ==================== -->
+    <div id="view-risk-checker" class="page-view">
+      
+      <!-- Hero -->
+      <section class="hero-section">
+        <div class="hero-content">
+          <div class="badge badge-demo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Educational demo, not medical advice
+          </div>
+          <h1 class="hero-headline">Know your risk, <span>understand why</span></h1>
+          <p class="hero-subhead">Explore an interactive machine-learning screening tool for diabetes and heart disease, with transparent SHAP explanations and private health tracking.</p>
+          <div class="hero-cta">
+            <a href="#risk-checker-form-anchor" class="btn btn-primary">Check My Risk</a>
+            <a href="#auth" class="btn btn-secondary">Sign In / Track Health</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Risk Checker Card -->
+      <section id="risk-checker-form-anchor" class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Interactive Health Risk Checker</h2>
+            <p class="card-subtitle">Enter basic measurements below to receive an instant, calibrated risk estimate.</p>
+          </div>
+          <button type="button" id="sampleBtn" class="btn btn-outline-primary btn-sm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Use Sample Values
+          </button>
+        </div>
+
+        <!-- Condition Toggle -->
+        <div class="condition-toggle" role="radiogroup" aria-label="Health condition to check">
+          <button type="button" class="toggle-option active" data-condition="diabetes">Diabetes Screening</button>
+          <button type="button" class="toggle-option" data-condition="heart_disease">Heart Disease Screening</button>
+        </div>
+
+        <form id="riskForm">
+          <div class="form-grid">
+            <!-- Common Fields -->
+            <div class="form-group">
+              <label for="input_age" class="form-label">Age <span class="form-unit">(years)</span></label>
+              <input type="number" id="input_age" class="form-input" min="1" max="120" value="45" required />
+              <span class="form-hint">Typical range: 18 - 85 years</span>
+            </div>
+
+            <div class="form-group">
+              <label for="input_sex" class="form-label">Biological Sex</label>
+              <select id="input_sex" class="form-select">
+                <option value="0">Female</option>
+                <option value="1">Male</option>
+              </select>
+              <span class="form-hint">Used for physiological baseline</span>
+            </div>
+
+            <div class="form-group">
+              <label for="input_bmi" class="form-label">BMI <span class="form-unit">(kg/m²)</span></label>
+              <input type="number" step="0.1" id="input_bmi" class="form-input" min="10" max="80" value="26.5" required />
+              <span class="form-hint">Healthy range: 18.5 - 24.9</span>
+            </div>
+
+            <div class="form-group">
+              <label for="input_blood_pressure" class="form-label">Resting Blood Pressure <span class="form-unit">(mm Hg)</span></label>
+              <input type="number" id="input_blood_pressure" class="form-input" min="40" max="250" value="122" required />
+              <span class="form-hint">Normal resting: &lt; 120 mm Hg</span>
+            </div>
+
+            <div class="form-group">
+              <label for="input_glucose" class="form-label">Fasting Glucose <span class="form-unit">(mg/dL)</span></label>
+              <input type="number" id="input_glucose" class="form-input" min="20" max="600" value="105" required />
+              <span class="form-hint">Normal fasting: 70 - 99 mg/dL</span>
+            </div>
+
+            <div class="form-group">
+              <label for="input_cholesterol" class="form-label">Serum Cholesterol <span class="form-unit">(mg/dL)</span></label>
+              <input type="number" id="input_cholesterol" class="form-input" min="50" max="600" value="195" required />
+              <span class="form-hint">Desirable total: &lt; 200 mg/dL</span>
+            </div>
+
+            <!-- Diabetes-Specific Fields -->
+            <div class="form-group field-diabetes">
+              <label for="input_pregnancies" class="form-label">Pregnancies <span class="form-unit">(count)</span></label>
+              <input type="number" id="input_pregnancies" class="form-input" min="0" max="20" value="1" />
+              <span class="form-hint">0 for males or nulliparous</span>
+            </div>
+
+            <div class="form-group field-diabetes">
+              <label for="input_insulin" class="form-label">Serum Insulin <span class="form-unit">(µU/mL)</span></label>
+              <input type="number" step="0.1" id="input_insulin" class="form-input" min="0" max="900" value="65" />
+              <span class="form-hint">2-hour fasting normal: 16 - 166</span>
+            </div>
+
+            <!-- Heart Disease-Specific Fields -->
+            <div class="form-group field-heart" style="display: none;">
+              <label for="input_chest_pain_type" class="form-label">Chest Pain Type</label>
+              <select id="input_chest_pain_type" class="form-select">
+                <option value="0">Typical Angina</option>
+                <option value="1">Atypical Angina</option>
+                <option value="2">Non-Anginal Pain</option>
+                <option value="3" selected>Asymptomatic (No pain)</option>
+              </select>
+              <span class="form-hint">Clinical classification</span>
+            </div>
+
+            <div class="form-group field-heart" style="display: none;">
+              <label for="input_max_heart_rate" class="form-label">Peak Exercise Heart Rate <span class="form-unit">(bpm)</span></label>
+              <input type="number" id="input_max_heart_rate" class="form-input" min="40" max="250" value="152" />
+              <span class="form-hint">Achieved during exercise/test</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Entered measurements are processed locally in real time and are not stored unless saved to your diary.
+            </span>
+            <button type="submit" id="predictSubmitBtn" class="btn btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+              <span>Calculate Estimated Risk</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Results Panel (Rendered dynamically) -->
+      <section id="resultsPanel" class="card results-card" style="display: none;">
+        <!-- Emergency Outlier Alert -->
+        <div id="dangerousAlert" class="alert-dangerous" style="display: none;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div id="dangerousAlertText"></div>
+        </div>
+
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Estimated Screening Assessment</h2>
+            <p class="card-subtitle">Transparent probability estimation with SHAP factor contributions.</p>
+          </div>
+          <button id="saveResultBtn" class="btn btn-primary btn-sm"></button>
+        </div>
+
+        <div class="results-grid">
+          <!-- Radial Gauge Column -->
+          <div class="gauge-wrapper">
+            <div class="radial-gauge">
+              <svg class="gauge-svg" viewBox="0 0 200 200">
+                <circle class="gauge-bg" cx="100" cy="100" r="90"></circle>
+                <circle id="gaugeMeter" class="gauge-meter" cx="100" cy="100" r="90" style="stroke-dashoffset: 565.48;"></circle>
+              </svg>
+              <div class="gauge-center-text">
+                <div id="gaugeNumber" class="gauge-percentage">0%</div>
+                <div class="gauge-subtext">Estimated Risk</div>
+              </div>
+            </div>
+            <div style="margin-top: 14px;">
+              <span id="gaugeRiskBadge" class="badge">--</span>
+            </div>
+          </div>
+
+          <!-- SHAP Top Contributing Factors Column -->
+          <div>
+            <h3 style="font-size: 1.15rem; margin-bottom: 6px;">Why this result: Top Contributing Factors</h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;">
+              Warm colors indicate measurements that pushed your estimated risk higher; cool teal bars indicate protective factors.
+            </p>
+            <div id="shapFactorsContainer" class="shap-factors"></div>
+          </div>
+        </div>
+
+        <!-- Next Steps & Disclaimer -->
+        <div class="next-steps-box">
+          <h4 style="font-size: 1.05rem; margin-bottom: 8px;">What You Can Do Next</h4>
+          <div class="next-steps-list">
+            <div class="step-item">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span><strong>Consult a doctor:</strong> Share these estimates and your actual lab tests with a physician for clinical assessment.</span>
+            </div>
+            <div class="step-item">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span><strong>Routine activity:</strong> 150 minutes of moderate cardiovascular movement per week aids glycemic control.</span>
+            </div>
+            <div class="step-item">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span><strong>Track progress:</strong> Save this entry to your private Health Diary to monitor trends and lifestyle changes over time.</span>
+            </div>
+          </div>
+
+          <p style="font-size: 0.82rem; color: var(--text-dim); margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <strong>Medical Disclaimer:</strong> This tool is an educational machine-learning demonstration and does not provide medical diagnoses or treatment plans. Estimates are probabilistic projections based on historical datasets. Always consult a licensed medical provider for diagnostic evaluation.
+          </p>
+        </div>
+      </section>
+
+    </div><!-- End view-risk-checker -->
+
+    <!-- ==================== VIEW 2: HOW IT WORKS ==================== -->
+    <div id="view-how-it-works" class="page-view" style="display: none;">
+      <div class="card">
+        <h2 class="card-title">How HealthRisk AI Works</h2>
+        <p class="card-subtitle">An end-to-end overview of our clinical machine learning architecture and explainability pipeline.</p>
+
+        <!-- 5-Step Flow -->
+        <div class="flow-steps">
+          <div class="flow-step-card">
+            <div class="step-number">1</div>
+            <h4>Data Ingestion</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+              Pima Indians Diabetes & Cleveland Heart Disease reference cohorts.
+            </p>
+          </div>
+          <div class="flow-step-card">
+            <div class="step-number">2</div>
+            <h4>Pre-processing</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+              Median imputation for zero-as-missing clinical markers and standard scaling.
+            </p>
+          </div>
+          <div class="flow-step-card">
+            <div class="step-number">3</div>
+            <h4>Model Training</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+              Logistic Regression, Random Forests, and Gradient Boosting ensembles.
+            </p>
+          </div>
+          <div class="flow-step-card">
+            <div class="step-number">4</div>
+            <h4>Evaluation</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+              Screening calibration prioritizing Recall & ROC-AUC over accuracy.
+            </p>
+          </div>
+          <div class="flow-step-card">
+            <div class="step-number">5</div>
+            <h4>SHAP Attribution</h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">
+              Personalized additive feature importance explaining the 'why' behind each score.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+          <h3 style="font-size: 1.25rem; margin-bottom: 12px;">Why Recall and ROC-AUC Matter More Than Accuracy in Screening</h3>
+          <p style="color: var(--text-muted); margin-bottom: 16px;">
+            In medical screening, missing a high-risk individual (a False Negative) has catastrophic consequences, whereas a False Positive simply leads to a follow-up test with a physician. Raw accuracy can be dangerously misleading in unbalanced healthcare data (for example, a model that classifies everyone as "healthy" could show 80% accuracy while failing 100% of sick patients).
+          </p>
+          <p style="color: var(--text-muted);">
+            Consequently, HealthRisk AI optimizes for <strong>Sensitivity (Recall)</strong> and <strong>ROC-AUC (Area Under the Receiver Operating Characteristic Curve)</strong> to guarantee strong discrimination capability across diagnostic thresholds.
+          </p>
+        </div>
+      </div>
+    </div><!-- End view-how-it-works -->
+
+    <!-- ==================== VIEW 3: MODEL PERFORMANCE ==================== -->
+    <div id="view-model-performance" class="page-view" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Empirical Model Performance & Comparison</h2>
+            <p class="card-subtitle">Validated metrics across cross-validation splits and clinical testing cohorts.</p>
+          </div>
+          <div class="condition-toggle" style="margin-bottom: 0;">
+            <button class="toggle-option metric-tab-btn active" data-condition="diabetes">Diabetes</button>
+            <button class="toggle-option metric-tab-btn" data-condition="heart_disease">Heart Disease</button>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px;">
+          <div style="background: var(--bg-card-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); text-align: center;">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Recall (Sensitivity)</div>
+            <div id="metricRecallVal" style="font-size: 2.2rem; font-weight: 800; color: var(--primary); margin: 6px 0;">--%</div>
+            <div style="font-size: 0.78rem; color: var(--text-dim);">Minimizes missed high-risk cases</div>
+          </div>
+          <div style="background: var(--bg-card-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); text-align: center;">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">ROC-AUC Score</div>
+            <div id="metricRocVal" style="font-size: 2.2rem; font-weight: 800; color: var(--secondary); margin: 6px 0;">0.--</div>
+            <div style="font-size: 0.78rem; color: var(--text-dim);">Diagnostic discrimination curve</div>
+          </div>
+          <div style="background: var(--bg-card-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); text-align: center;">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Precision (PPV)</div>
+            <div id="metricPrecVal" style="font-size: 2.2rem; font-weight: 800; color: var(--risk-mod); margin: 6px 0;">--%</div>
+            <div style="font-size: 0.78rem; color: var(--text-dim);">Positive prediction reliability</div>
+          </div>
+        </div>
+
+        <!-- Grid with ROC Curve Chart and Comparison Table -->
+        <div style="display: grid; grid-template-columns: 340px 1fr; gap: 28px; align-items: start;">
+          <div>
+            <h4 style="margin-bottom: 10px;">ROC Curve (True Positive vs False Positive)</h4>
+            <div style="background: var(--bg-card-subtle); border-radius: var(--radius-sm); padding: 10px; border: 1px solid var(--border-color); display: flex; justify-content: center;">
+              <svg id="rocCurveSvg" width="320" height="240"></svg>
+            </div>
+          </div>
+          <div>
+            <h4 style="margin-bottom: 10px;">Model Architecture Comparison</h4>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Recall</th>
+                    <th>ROC-AUC</th>
+                    <th>Precision</th>
+                    <th>Accuracy</th>
+                  </tr>
+                </thead>
+                <tbody id="comparisonTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- End view-model-performance -->
+
+    <!-- ==================== VIEW 4: ABOUT THE DATA ==================== -->
+    <div id="view-about-data" class="page-view" style="display: none;">
+      <div class="card">
+        <h2 class="card-title">About the Datasets & Honest Limitations</h2>
+        <p class="card-subtitle">Transparent clinical data disclosures and population representation constraints.</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin: 24px 0;">
+          <div style="background: var(--bg-card-subtle); padding: 24px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div class="badge badge-demo" style="margin-bottom: 10px;">Diabetes Cohort</div>
+            <h3>Pima Indians Diabetes Dataset</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin: 10px 0;">
+              Collected by the National Institute of Diabetes and Digestive and Kidney Diseases (NIDDK). Contains 768 female patient observations of Akimel O'odham (Pima) descent living near Phoenix, Arizona.
+            </p>
+            <ul style="font-size: 0.85rem; color: var(--text-dim); padding-left: 20px;">
+              <li>Sample Size: 768 individuals</li>
+              <li>Missing Data: Zero values recorded for glucose, BP, skinfold, and BMI (handled via median imputation).</li>
+            </ul>
+          </div>
+
+          <div style="background: var(--bg-card-subtle); padding: 24px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div class="badge badge-demo" style="margin-bottom: 10px;">Cardiovascular Cohort</div>
+            <h3>Cleveland Heart Disease Dataset</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin: 10px 0;">
+              Derived from the UCI Machine Learning Repository, compiled by the Cleveland Clinic Foundation. Contains 303 patient records undergoing coronary angiography.
+            </p>
+            <ul style="font-size: 0.85rem; color: var(--text-dim); padding-left: 20px;">
+              <li>Sample Size: 303 individuals</li>
+              <li>Outcome: Angiographic disease status (>50% diameter narrowing in major blood vessels).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: 20px; color: #92400e;">
+          <h4 style="margin-bottom: 6px;">Important Scientific Limitations</h4>
+          <p style="font-size: 0.9rem; line-height: 1.6;">
+            These benchmark research datasets are relatively small by modern biomedical standards and are not representative of all age groups, ethnicities, or global demographics. Genetic, socioeconomic, and lifestyle variations mean that predictions cannot replace comprehensive diagnostic laboratory panels conducted under clinical supervision.
+          </p>
+        </div>
+      </div>
+    </div><!-- End view-about-data -->
+
+    <!-- ==================== VIEW 5: AUTHENTICATION ==================== -->
+    <div id="view-auth" class="page-view" style="display: none;">
+      <div style="max-width: 480px; margin: 40px auto;">
+        <div class="card" style="padding: 36px;">
+          <!-- Header -->
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div class="brand-icon" style="margin: 0 auto 12px; width: 44px; height: 44px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <h2 style="font-size: 1.5rem; margin-bottom: 6px;">HealthRisk AI Account</h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted);">Save your results and track your health over time.</p>
+          </div>
+
+          <!-- Lockout Alert -->
+          <div id="lockoutAlert" class="alert-dangerous" style="display: none; margin-bottom: 20px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div>
+              <strong>Account Temporarily Locked</strong><br/>
+              Too many failed login attempts. Retry in <span id="lockoutTimerText" style="font-weight: 700;">15:00</span>.
+            </div>
+          </div>
+
+          <!-- Tabs Switch -->
+          <div class="condition-toggle" style="width: 100%; display: flex; margin-bottom: 24px;">
+            <button id="tabSignIn" class="toggle-option active" style="flex: 1; text-align: center;">Sign In</button>
+            <button id="tabSignUp" class="toggle-option" style="flex: 1; text-align: center;">Sign Up</button>
+          </div>
+
+          <!-- Sign In Form -->
+          <form id="formSignIn">
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label for="signInEmail" class="form-label">Email Address</label>
+              <input type="email" id="signInEmail" class="form-input" placeholder="you@example.com" required />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="signInPassword" class="form-label">Password</label>
+                <a href="javascript:void(0)" onclick="openForgotPasswordModal()" style="font-size: 0.8rem;">Forgot password?</a>
+              </div>
+              <div style="position: relative;">
+                <input type="password" id="signInPassword" class="form-input" style="padding-right: 40px;" required />
+                <button type="button" class="pw-toggle" data-target="signInPassword" style="position: absolute; right: 10px; top: 12px; color: var(--text-dim);" aria-label="Toggle password visibility">👁</button>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+              <input type="checkbox" id="signInRemember" style="accent-color: var(--primary);" />
+              <label for="signInRemember" style="font-size: 0.88rem; color: var(--text-muted); cursor: pointer;">Remember me (extended session)</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+          </form>
+
+          <!-- Sign Up Form -->
+          <form id="formSignUp" style="display: none;">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="signUpName" class="form-label">Full Name</label>
+              <input type="text" id="signUpName" class="form-input" placeholder="Dr. Jane Doe" required />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="signUpEmail" class="form-label">Email Address</label>
+              <input type="email" id="signUpEmail" class="form-input" placeholder="you@example.com" required />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="signUpPassword" class="form-label">Password</label>
+              <div style="position: relative;">
+                <input type="password" id="signUpPassword" class="form-input" style="padding-right: 40px;" minlength="12" required />
+                <button type="button" class="pw-toggle" data-target="signUpPassword" style="position: absolute; right: 10px; top: 12px; color: var(--text-dim);" aria-label="Toggle password visibility">👁</button>
+              </div>
+              <div class="strength-meter-bar">
+                <div id="strengthMeterFill" class="strength-meter-fill" style="width: 0%;"></div>
+              </div>
+              <span id="strengthMeterLabel" style="font-size: 0.78rem; color: var(--text-dim);">Minimum 12 characters, numbers, uppercase, and symbols.</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 18px;">
+              <label for="signUpConfirm" class="form-label">Confirm Password</label>
+              <input type="password" id="signUpConfirm" class="form-input" required />
+            </div>
+
+            <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 22px;">
+              <input type="checkbox" id="signUpTerms" style="accent-color: var(--primary); margin-top: 3px;" required />
+              <label for="signUpTerms" style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; cursor: pointer;">
+                I acknowledge that HealthRisk AI is an <strong>educational screening demo</strong> and not a clinical diagnostic medical device. I agree to the privacy policy.
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create Free Account</button>
+          </form>
+
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="#risk-checker" style="font-size: 0.9rem; color: var(--text-muted);">← Continue without account</a>
+          </div>
+        </div>
+      </div>
+    </div><!-- End view-auth -->
+
+    <!-- ==================== VIEW 6: HEALTH DIARY ==================== -->
+    <div id="view-diary" class="page-view" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">My Health Diary</h2>
+            <p class="card-subtitle">Private journal tracking predictions, lifestyle logs, and biomarkers over time.</p>
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="exportDiaryCsv()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+            <a href="#risk-checker" class="btn btn-primary btn-sm">+ New Prediction</a>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; padding: 14px; background: var(--bg-card-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <div style="flex: 1; min-width: 180px;">
+            <input type="text" id="diarySearchInput" class="form-input" placeholder="Search notes or tags..." oninput="loadDiaryEntries()" />
+          </div>
+          <div style="width: 160px;">
+            <select id="diaryFilterCondition" class="form-select" onchange="loadDiaryEntries()">
+              <option value="">All Conditions</option>
+              <option value="diabetes">Diabetes</option>
+              <option value="heart_disease">Heart Disease</option>
+            </select>
+          </div>
+          <div style="width: 140px;">
+            <select id="diaryFilterRisk" class="form-select" onchange="loadDiaryEntries()">
+              <option value="">All Risks</option>
+              <option value="Low">Low Risk</option>
+              <option value="Moderate">Moderate Risk</option>
+              <option value="High">High Risk</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="diaryEmptyState" style="display: none; text-align: center; padding: 60px 20px;">
+          <div style="font-size: 3rem; margin-bottom: 12px;">📋</div>
+          <h3 style="font-size: 1.3rem; margin-bottom: 8px;">Your Health Diary is empty</h3>
+          <p style="color: var(--text-muted); max-width: 440px; margin: 0 auto 20px;">
+            Take your first educational risk screening or log a health measurement to begin tracking your trends over time.
+          </p>
+          <a href="#risk-checker" class="btn btn-primary">Make Your First Prediction</a>
+        </div>
+
+        <!-- Diary Entries List -->
+        <div id="diaryEntriesList" class="diary-timeline"></div>
+      </div>
+    </div><!-- End view-diary -->
+
+    <!-- ==================== VIEW 7: TRENDS ==================== -->
+    <div id="view-trends" class="page-view" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Biomarker & Risk Trends</h2>
+            <p class="card-subtitle">Visualize changes in your estimated probability and measurements across time.</p>
+          </div>
+          <div>
+            <select id="trendsRangeSelect" class="form-select" onchange="loadTrends()">
+              <option value="7">Last 7 Days</option>
+              <option value="30" selected>Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Summary KPI Card -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div style="background: var(--bg-card-subtle); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Latest Estimated Risk</div>
+            <div id="trendsLatestRisk" style="font-size: 2rem; font-weight: 800; color: var(--primary);">--%</div>
+          </div>
+          <div style="background: var(--bg-card-subtle); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Trajectory</div>
+            <div id="trendsRiskChange" style="font-size: 1.25rem; font-weight: 700; margin-top: 6px;">--</div>
+          </div>
+          <div style="background: var(--bg-card-subtle); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Status Indicator</div>
+            <div id="trendsStatusIndicator" style="font-size: 1.15rem; margin-top: 6px;">--</div>
+          </div>
+        </div>
+
+        <!-- Time Series Chart -->
+        <div>
+          <h4 style="margin-bottom: 12px;">Estimated Risk Probability (%) Over Time</h4>
+          <div style="background: var(--bg-card-subtle); border-radius: var(--radius-sm); padding: 16px; border: 1px solid var(--border-color); overflow-x: auto;">
+            <svg id="trendsChartSvg" width="680" height="260" style="width: 100%; max-width: 680px;"></svg>
+          </div>
+        </div>
+      </div>
+    </div><!-- End view-trends -->
+
+    <!-- ==================== VIEW 8: GOALS ==================== -->
+    <div id="view-goals" class="page-view" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Personal Lifestyle Goals</h2>
+            <p class="card-subtitle">Set habit milestones for glucose, physical activity, and biomarkers.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openNewGoalModal()">+ New Goal</button>
+        </div>
+
+        <div style="background: var(--primary-subtle); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 24px; color: var(--primary); font-size: 0.88rem;">
+          💡 <strong>Notice:</strong> These are self-directed personal habit milestones to encourage wellness routines, not prescribed clinical targets.
+        </div>
+
+        <div id="goalsList"></div>
+      </div>
+    </div><!-- End view-goals -->
+
+  </main>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Modal: Save to Health Diary -->
+  <div id="saveModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="card-header">
+        <h3 style="font-size: 1.3rem;">Save Prediction to Diary</h3>
+        <button class="modal-close-btn" style="font-size: 1.5rem; color: var(--text-dim);">&times;</button>
+      </div>
+
+      <form id="saveDiaryForm">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="saveDiaryMood" class="form-label">Energy & Mood (1 - 5)</label>
+          <select id="saveDiaryMood" class="form-select">
+            <option value="5">5 — High Energy & Optimistic</option>
+            <option value="4" selected>4 — Good / Balanced</option>
+            <option value="3">3 — Neutral</option>
+            <option value="2">2 — Low Energy / Stressed</option>
+            <option value="1">1 — Very Fatigued</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="saveDiaryTags" class="form-label">Tags <span class="form-unit">(comma separated)</span></label>
+          <input type="text" id="saveDiaryTags" class="form-input" placeholder="fasting, post-workout, stress" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div class="form-group">
+            <label for="saveDiarySleep" class="form-label">Sleep <span class="form-unit">(hours)</span></label>
+            <input type="number" step="0.5" id="saveDiarySleep" class="form-input" placeholder="7.5" />
+          </div>
+          <div class="form-group">
+            <label for="saveDiarySteps" class="form-label">Steps Count</label>
+            <input type="number" id="saveDiarySteps" class="form-input" placeholder="8500" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label for="saveDiaryNote" class="form-label">Personal Health Note <span class="form-unit">(max 2000 chars)</span></label>
+          <textarea id="saveDiaryNote" class="form-textarea" rows="3" placeholder="How were your meals, hydration, and exercise today?"></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Compare Two Entries -->
+  <div id="compareModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 640px;">
+      <div class="card-header">
+        <h3 style="font-size: 1.3rem;">Side-by-Side Comparison</h3>
+        <button class="modal-close-btn" style="font-size: 1.5rem; color: var(--text-dim);">&times;</button>
+      </div>
+      <div id="compareContent"></div>
+      <div style="margin-top: 24px; text-align: right;">
+        <button class="btn btn-primary modal-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: New Goal -->
+  <div id="goalModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="card-header">
+        <h3 style="font-size: 1.3rem;">Set a Personal Health Habit Goal</h3>
+        <button class="modal-close-btn" style="font-size: 1.5rem; color: var(--text-dim);">&times;</button>
+      </div>
+      <form id="newGoalForm">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="goalTitle" class="form-label">Goal Title</label>
+          <input type="text" id="goalTitle" class="form-input" placeholder="e.g. Keep fasting glucose under 100" required />
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="goalMetric" class="form-label">Target Biomarker</label>
+          <select id="goalMetric" class="form-select">
+            <option value="glucose">Fasting Glucose (mg/dL)</option>
+            <option value="blood_pressure">Resting Blood Pressure (mm Hg)</option>
+            <option value="bmi">Body Mass Index (BMI)</option>
+            <option value="steps">Daily Steps</option>
+            <option value="sleep_hours">Sleep Hours</option>
+          </select>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+          <div class="form-group">
+            <label for="goalDirection" class="form-label">Condition</label>
+            <select id="goalDirection" class="form-select">
+              <option value="under">At or Below (&le;)</option>
+              <option value="over">At or Above (&ge;)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="goalValue" class="form-label">Target Value</label>
+            <input type="number" step="0.1" id="goalValue" class="form-input" placeholder="100" required />
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Goal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="brand-icon" style="width: 28px; height: 28px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <strong>HealthRisk AI</strong>
+        </div>
+        <div>
+          <span>Designed & Built by <strong>Kunal &amp; Team</strong> · Hackathon &amp; Educational Project</span>
+        </div>
+      </div>
+
+      <div class="footer-disclaimer">
+        <strong>Educational Disclaimer:</strong> HealthRisk AI is strictly an educational machine learning demonstration designed for students, hackathon judges, and general learning. It does not provide medical diagnoses, treatment recommendations, or personalized clinical decisions. Always consult a licensed healthcare professional for any health concerns or diagnostic evaluations.
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    function openNewGoalModal() {
+      document.getElementById("goalModal").classList.add("open");
+    }
+
+    document.getElementById("newGoalForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = document.getElementById("goalTitle").value;
+      const metric = document.getElementById("goalMetric").value;
+      const direction = document.getElementById("goalDirection").value;
+      const targetVal = parseFloat(document.getElementById("goalValue").value);
+
+      const units = {
+        glucose: "mg/dL",
+        blood_pressure: "mm Hg",
+        bmi: "kg/m²",
+        steps: "steps",
+        sleep_hours: "hrs"
+      };
+
+      try {
+        await apiRequest("/goals", {
+          method: "POST",
+          body: JSON.stringify({
+            title,
+            target_metric: metric,
+            target_value: targetVal,
+            unit: units[metric] || "",
+            direction
+          })
+        });
+        closeModals();
+        showToast("New goal added successfully!", "success");
+        loadGoals();
+      } catch (err) {
+        showToast("Failed to create goal.", "error");
+      }
+    });
+
+    function openForgotPasswordModal() {
+      const email = prompt("Enter your account email to receive a password reset token:");
+      if (!email) return;
+      apiRequest("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email })
+      }).then(res => {
+        if (res && res.demo_reset_token) {
+          const newPw = prompt(`Demo Reset Token: ${res.demo_reset_token}\nEnter your new password (min 12 chars):`);
+          if (newPw) {
+            apiRequest("/auth/reset-password", {
+              method: "POST",
+              body: JSON.stringify({
+                token: res.demo_reset_token,
+                new_password: newPw,
+                confirm_password: newPw
+              })
+            }).then(() => {
+              showToast("Password updated! You can now sign in.", "success");
+            }).catch(e => showToast(e.data?.detail || "Failed to update password", "error"));
+          }
+        } else {
+          showToast("Password reset dispatched.", "info");
+        }
+      }).catch(e => showToast("Request failed", "error"));
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: healthrisk-ai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: healthrisk-db
+          property: connectionString
+      - key: REDIS_URL
+        value: ""
+
+databases:
+  - name: healthrisk-db
+    plan: free
+    region: oregon

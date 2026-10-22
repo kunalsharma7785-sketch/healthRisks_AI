@@ -1,0 +1,24 @@
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: '@vscode/test-electron@3.1.0',
+npm WARN EBADENGINE   required: { node: '>=22' },
+npm WARN EBADENGINE   current: { node: 'v19.0.0', npm: '8.19.2' }
+npm WARN EBADENGINE }
+npm WARN deprecated es5class@2.3.1: this package isn't maintained anymore because ES6+
+
+added 521 packages, and audited 523 packages in 7s
+
+114 packages are looking for funding
+  run `npm fund` for details
+
+24 vulnerabilities (4 low, 4 moderate, 15 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
